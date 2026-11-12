@@ -1,7 +1,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { connectDB } from "./config/db";
+import { connectDB } from "./config/db.js";
+import studioRoutes from "./routes/studio.routes.js";
 
 dotenv.config();
 
@@ -18,10 +19,10 @@ app.use(
 app.use(express.json());
 
 app.get("/", (_req, res) => {
-  res.json({
-    message: "StudioSpace API is running",
-  });
+  res.json({ message: "StudioSpace API is running" });
 });
+
+app.use("/api/studios", studioRoutes);
 
 async function startServer() {
   try {
