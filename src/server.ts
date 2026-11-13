@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db.js";
 import studioRoutes from "./routes/studio.routes.js";
+import bookingRoutes from "./routes/booking.routes.js";
 
 dotenv.config();
 
@@ -23,7 +24,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/studios", studioRoutes);
-
+app.use("/api/bookings", bookingRoutes);
 async function startServer() {
   try {
     await connectDB();
