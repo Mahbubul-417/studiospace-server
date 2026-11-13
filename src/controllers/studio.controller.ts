@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { ObjectId } from "mongodb";
 import { connectDB } from "../config/db.js";
+import { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 
 export async function getStudios(req: Request, res: Response) {
   try {
@@ -75,7 +76,10 @@ export async function getStudioById(req: Request, res: Response) {
   }
 }
 
-export async function createStudio(req: Request, res: Response) {
+export async function createStudio(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
     const {
       title,
@@ -87,18 +91,19 @@ export async function createStudio(req: Request, res: Response) {
       capacity,
       image,
       amenities,
-      hostName,
-      hostEmail,
     } = req.body;
 
     if (
-      !title ||
-      !category ||
-      !description ||
-      !location ||
-      !image ||
-      !hostName ||
-      !hostEmail ||
+      typeof title !== "string" ||
+      !title.trim() ||
+      typeof category !== "string" ||
+      !category.trim() ||
+      typeof description !== "string" ||
+      !description.trim() ||
+      typeof location !== "string" ||
+      !location.trim() ||
+      typeof image !== "string" ||
+      !image.trim() ||
       price === undefined ||
       deposit === undefined ||
       capacity === undefined ||
@@ -115,13 +120,27 @@ export async function createStudio(req: Request, res: Response) {
       typeof price !== "number" ||
       typeof deposit !== "number" ||
       typeof capacity !== "number" ||
+      !Number.isFinite(price) ||
+      !Number.isFinite(deposit) ||
+      !Number.isInteger(capacity) ||
       price <= 0 ||
       deposit < 0 ||
-      capacity <= 0
+      capacity <= 0 ||
+      !amenities.every(
+        (item: unknown) => typeof item === "string" && item.trim()
+      )
     ) {
       res.status(400).json({
         success: false,
-        message: "Invalid price, deposit, or capacity",
+        message: "Invalid studio information",
+      });
+      return;
+    }
+
+    if (!req.user?.id || !req.user.email) {
+      res.status(401).json({
+        success: false,
+        message: "Authenticated user information is missing",
       });
       return;
     }
@@ -130,17 +149,17 @@ export async function createStudio(req: Request, res: Response) {
     const now = new Date();
 
     const studio = {
-      title,
-      category,
-      description,
-      location,
+      title: title.trim(),
+      category: category.trim(),
+      description: description.trim(),
+      location: location.trim(),
       price,
       deposit,
       capacity,
-      image,
-      amenities,
-      hostName,
-      hostEmail,
+      image: image.trim(),
+      amenities: amenities.map((item: string) => item.trim()),
+      hostEmail: req.user.email,
+      hostId: req.user.id,
       createdAt: now,
       updatedAt: now,
     };

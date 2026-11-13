@@ -1,14 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-const authBaseURL = process.env.AUTH_BASE_URL;
-const jwksURL = process.env.AUTH_JWKS_URL;
-
-if (!authBaseURL || !jwksURL) {
-  throw new Error("Authentication environment variables are missing");
-}
-
-const JWKS = createRemoteJWKSet(new URL(jwksURL));
+let JWKS: ReturnType<typeof createRemoteJWKSet> | undefined;
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -23,6 +16,17 @@ export async function verifyToken(
   next: NextFunction
 ) {
   try {
+    const authBaseURL = process.env.AUTH_BASE_URL;
+    const jwksURL = process.env.AUTH_JWKS_URL;
+
+    if (!authBaseURL || !jwksURL) {
+      res.status(500).json({
+        success: false,
+        message: "Authentication configuration is missing",
+      });
+      return;
+    }
+
     const authorization = req.headers.authorization;
 
     if (!authorization?.startsWith("Bearer ")) {
@@ -33,7 +37,11 @@ export async function verifyToken(
       return;
     }
 
-    const token = authorization.split(" ")[1];
+    const token = authorization.slice(7);
+
+    if (!JWKS) {
+      JWKS = createRemoteJWKSet(new URL(jwksURL));
+    }
 
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: authBaseURL,
