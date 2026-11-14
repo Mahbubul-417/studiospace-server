@@ -19,6 +19,10 @@ export async function getStudios(req: Request, res: Response) {
       };
     }
 
+    if (featured === "true") {
+      filter.featured = true;
+    }
+
     let query = db.collection("studios").find(filter);
 
     if (featured === "true") {
@@ -200,7 +204,10 @@ export async function getMyListings(
 
     const studios = await db
       .collection("studios")
-      .find({ hostId: req.user.id })
+      .find({
+        hostId: req.user.id,
+        featured: { $ne: true },
+      })
       .sort({ createdAt: -1 })
       .toArray();
 
