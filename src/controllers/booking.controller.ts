@@ -1,4 +1,5 @@
-import { Request, Response } from "express";
+
+import { Response } from "express";
 import { ObjectId } from "mongodb";
 import { connectDB } from "../config/db.js";
 import { AuthenticatedRequest } from "../middleware/auth.middleware.js";
@@ -8,12 +9,7 @@ export async function createBooking(
   res: Response
 ) {
   try {
-    const {
-      studioId,
-      date,
-      startTime,
-      duration,
-    } = req.body;
+    const { studioId, date, startTime, duration } = req.body;
 
     if (
       !studioId ||
@@ -52,9 +48,7 @@ export async function createBooking(
       return;
     }
 
-    const timeMatch = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(
-      startTime
-    );
+    const timeMatch = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(startTime);
 
     if (!timeMatch) {
       res.status(400).json({
@@ -233,23 +227,109 @@ export async function getHostBookings(
   }
 }
 
+export async function cancelBooking(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const id = req.params.id;
+
+    if (typeof id !== "string" || !ObjectId.isValid(id)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid booking ID",
+      });
+      return;
+    }
+
+    if (!req.user?.id) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+      return;
+    }
+
+    const db = await connectDB();
+    const bookings = db.collection("bookings");
+
+    const booking = await bookings.findOne({
+      _id: new ObjectId(id),
+      userId: req.user.id,
+    });
+
+    if (!booking) {
+      res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+      return;
+    }
+
+    if (booking.status !== "Pending") {
+      res.status(400).json({
+        success: false,
+        message: "Only pending booking requests can be cancelled",
+      });
+      return;
+    }
+
+    const result = await bookings.updateOne(
+      {
+        _id: booking._id,
+        userId: req.user.id,
+        status: "Pending",
+      },
+      {
+        $set: {
+          status: "Cancelled",
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    if (result.modifiedCount === 0) {
+      res.status(409).json({
+        success: false,
+        message: "This booking request has already been updated",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Booking request cancelled successfully",
+    });
+  } catch (error) {
+    console.error("Cancel booking error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to cancel booking request",
+    });
+  }
+}
+
 export async function updateBookingStatus(
   req: AuthenticatedRequest,
   res: Response
 ) {
   try {
-    const  id  = req.params.id;
+    const id = req.params.id;
     const { status } = req.body;
 
-   if (typeof id !== "string") {
-  res.status(400).json({
-    success: false,
-    message: "Invalid booking ID",
-  });
-  return;
-}
+    if (typeof id !== "string" || !ObjectId.isValid(id)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid booking ID",
+      });
+      return;
+    }
 
-    if (!["Confirmed", "Cancelled", "Completed"].includes(status)) {
+    if (
+      typeof status !== "string" ||
+      !["Confirmed", "Cancelled", "Completed"].includes(status)
+    ) {
       res.status(400).json({
         success: false,
         message: "Invalid booking status",
@@ -308,7 +388,7 @@ export async function updateBookingStatus(
       }
     }
 
-    await bookings.updateOne(
+    const result = await bookings.updateOne(
       {
         _id: booking._id,
         hostId: req.user.id,
@@ -321,6 +401,14 @@ export async function updateBookingStatus(
         },
       }
     );
+
+    if (result.modifiedCount === 0) {
+      res.status(409).json({
+        success: false,
+        message: "This booking has already been updated",
+      });
+      return;
+    }
 
     res.status(200).json({
       success: true,
